@@ -9,7 +9,8 @@
 <style>
   :root {
     --bg: #05070d; --panel: #0b1020; --line: #16203a; --text: #d7e2ff; --dim: #6a7aa3;
-    --p0: #36f2ff; --p1: #ff8a2a;
+    --c0: #36f2ff; --c1: #ff8a2a;
+    --i-turbo: #ffe14a; --i-frein: #ff3b4a; --i-fantome: #c9b8ff; --i-gomme: #3dff7a;
     --font: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
     color-scheme: dark;
   }
@@ -18,31 +19,51 @@
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--bg); color: var(--text); font-family: var(--font);
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
     padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
     overflow: hidden; touch-action: none; user-select: none;
   }
   header { width: 100%; max-width: 960px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   h1 { margin: 0; font-size: 1.1rem; letter-spacing: .3em; font-weight: 700; }
   .score { display: flex; align-items: center; gap: 14px; font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .s0 { color: var(--p0); text-shadow: 0 0 12px var(--p0); }
-  .s1 { color: var(--p1); text-shadow: 0 0 12px var(--p1); }
-  .tag { font-size: .65rem; letter-spacing: .15em; color: var(--dim); display: block; text-align: center; text-shadow: none; }
+  .s0 { color: var(--c0); text-shadow: 0 0 12px var(--c0); }
+  .s1 { color: var(--c1); text-shadow: 0 0 12px var(--c1); }
+  .s0, .s1 { text-align: center; min-width: 4.5em; }
+  .tag { font-size: .65rem; letter-spacing: .1em; display: block; text-shadow: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9em; margin: 0 auto; }
+  #fx { width: 100%; max-width: 960px; min-height: 24px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .chip { position: relative; overflow: hidden; border: 1px solid var(--c); color: var(--c); font-size: .75rem; font-weight: 700; letter-spacing: .12em; padding: 3px 10px 5px; }
+  .chip i { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--c); animation: drain linear forwards; }
+  @keyframes drain { to { width: 0; } }
   #wrap { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 0; }
   canvas { display: block; border: 1px solid var(--line); box-shadow: 0 0 40px #0a1a3a; }
   #overlay {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 10px; text-align: center; pointer-events: none;
+    gap: 10px; text-align: center; pointer-events: none; padding: 8px;
   }
-  #big { font-size: clamp(2rem, 9vw, 5rem); font-weight: 700; letter-spacing: .08em; }
-  #sub { color: var(--dim); font-size: 1rem; max-width: 34ch; }
+  #big { font-size: clamp(1.8rem, 8vw, 4.5rem); font-weight: 700; letter-spacing: .08em; }
+  #sub { color: var(--dim); font-size: 1rem; max-width: 40ch; }
   .share { pointer-events: auto; display: flex; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; max-width: 100%; }
   .share code { font-size: .8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  button { font: inherit; font-weight: 700; background: var(--p0); color: #001018; border: 0; padding: 6px 12px; cursor: pointer; }
-  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  button { font: inherit; font-weight: 700; background: var(--c0); color: #001018; border: 0; padding: 6px 12px; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
   #mute { background: transparent; color: var(--dim); border: 1px solid var(--line); font-size: .8rem; letter-spacing: .1em; }
-  #mute.on { color: var(--p0); border-color: var(--p0); }
-  footer { color: var(--dim); font-size: .8rem; text-align: center; }
+  #mute.on { color: var(--c0); border-color: var(--c0); }
+
+  #lobby { pointer-events: auto; background: var(--panel); border: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 10px; width: min(340px, 100%); text-align: left; }
+  #lobby label, #lobby .lbl { font-size: .7rem; letter-spacing: .18em; color: var(--dim); }
+  #name { font: inherit; font-size: 1.1rem; background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 8px 10px; width: 100%; user-select: text; }
+  #swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .sw { aspect-ratio: 1; padding: 0; border: 2px solid transparent; background: var(--sw); box-shadow: 0 0 10px var(--sw); }
+  .sw.sel { border-color: var(--text); outline: 2px solid var(--sw); outline-offset: 2px; }
+  .sw:disabled { opacity: .15; box-shadow: none; cursor: not-allowed; }
+  #play { background: var(--pick, var(--c0)); font-size: 1.05rem; letter-spacing: .2em; padding: 10px; }
+  #lobbyErr { margin: 0; color: var(--i-frein); font-size: .85rem; }
+  footer { color: var(--dim); font-size: .78rem; text-align: center; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: center; }
+  footer b { font-weight: 700; }
+  @media (max-width: 560px) {
+    h1 { display: none; }
+    #mute { font-size: .7rem; padding: 6px 8px; }
+  }
 </style>
 </head>
 <body>
@@ -55,34 +76,57 @@
   </div>
   <button id="mute" type="button">MUSIQUE</button>
 </header>
+<div id="fx"></div>
 <div id="wrap">
   <canvas id="cv"></canvas>
   <div id="overlay">
     <div id="big">CONNEXION…</div>
     <div id="sub"></div>
     <div class="share" id="share" hidden>
-      <code id="link"></code><button id="copy">Copier</button>
+      <code id="link"></code><button id="copy" type="button">Copier</button>
     </div>
+    <form id="lobby" hidden>
+      <label for="name">PSEUDO</label>
+      <input id="name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Ton pseudo">
+      <span class="lbl">COULEUR</span>
+      <div id="swatches"></div>
+      <p id="lobbyErr" hidden>Cette couleur vient d'être prise, choisis-en une autre.</p>
+      <button id="play" type="submit">JOUER</button>
+    </form>
   </div>
 </div>
-<footer>Flèches, ZQSD ou WASD · sur mobile : glisse le doigt · premier à 5 manches</footer>
+<footer>
+  <span>Flèches, ZQSD ou WASD · mobile : glisse le doigt · premier à 5</span>
+  <span><b style="color:var(--i-turbo)">» Turbo</b> toi + vite</span>
+  <span><b style="color:var(--i-frein)">● Frein</b> lui + lent</span>
+  <span><b style="color:var(--i-fantome)">○ Fantôme</b> traverse les traînées</span>
+  <span><b style="color:var(--i-gomme)">◆ Gomme</b> efface tout</span>
+</footer>
 
 <script>
+const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 let room = params.get('r');
 if (!room) { room = Math.random().toString(36).slice(2, 7); history.replaceState(null, '', '?r=' + room); }
 const shareUrl = location.origin + location.pathname + '?r=' + room;
-document.getElementById('link').textContent = shareUrl;
-document.getElementById('copy').onclick = async () => {
-  try { await navigator.clipboard.writeText(shareUrl); document.getElementById('copy').textContent = 'Copié'; }
-  catch { getSelection().selectAllChildren(document.getElementById('link')); }
+$('link').textContent = shareUrl;
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(shareUrl); $('copy').textContent = 'Copié'; }
+  catch { getSelection().selectAllChildren($('link')); }
 };
 
-const COL = ['#36f2ff', '#ff8a2a'];
-const cv = document.getElementById('cv'), cx = cv.getContext('2d');
-const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const ITEM_COL = { turbo: '#ffe14a', frein: '#ff3b4a', fantome: '#c9b8ff', gomme: '#3dff7a' };
+const cv = $('cv'), cx = cv.getContext('2d');
 let W = 60, H = 40, cell = 10, me = -1, trails = [[], []], crash = null, score = [0, 0];
+let walls = new Uint8Array(W * H), items = [], players = [null, null], COLORS = [], COL = ['#36f2ff', '#ff8a2a'];
+let myColor = store.get('tronColor'), wasJoined = false;
+$('name').value = store.get('tronName') || '';
 
+// ---------- Rendu ----------
 function fit() {
   const wrap = $('wrap').getBoundingClientRect();
   cell = Math.max(4, Math.floor(Math.min(wrap.width / W, wrap.height / H)));
@@ -94,8 +138,33 @@ function redraw() {
   cx.strokeStyle = '#0d1528'; cx.lineWidth = 1;
   for (let x = 0; x <= W; x += 5) { cx.beginPath(); cx.moveTo(x * cell + .5, 0); cx.lineTo(x * cell + .5, cv.height); cx.stroke(); }
   for (let y = 0; y <= H; y += 5) { cx.beginPath(); cx.moveTo(0, y * cell + .5); cx.lineTo(cv.width, y * cell + .5); cx.stroke(); }
+  for (let i = 0; i < walls.length; i++) if (walls[i]) {
+    const x = i % W, y = (i / W) | 0;
+    cx.fillStyle = '#1a2850'; cx.fillRect(x * cell, y * cell, cell, cell);
+    cx.fillStyle = '#2a4180'; cx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
+  }
+  items.forEach(drawItem);
   trails.forEach((t, i) => t.forEach((p, j) => drawCell(i, p, j === t.length - 1)));
   if (crash) crash.forEach(c => c && drawBoom(c));
+}
+function drawItem([x, y, k]) {
+  const mx = (x + 1) * cell, my = (y + 1) * cell, r = cell * 0.85, c = ITEM_COL[k];
+  cx.save();
+  cx.shadowColor = c; cx.shadowBlur = 12;
+  cx.fillStyle = c; cx.strokeStyle = c; cx.lineWidth = Math.max(2, cell / 5); cx.lineJoin = 'round';
+  if (k === 'turbo') {
+    for (const off of [-r * 0.45, r * 0.25]) {
+      cx.beginPath(); cx.moveTo(mx + off - r * 0.3, my - r * 0.6); cx.lineTo(mx + off + r * 0.3, my); cx.lineTo(mx + off - r * 0.3, my + r * 0.6); cx.stroke();
+    }
+  } else if (k === 'frein') {
+    cx.beginPath(); cx.arc(mx, my, r * 0.8, 0, 7); cx.fill();
+    cx.shadowBlur = 0; cx.fillStyle = '#fff'; cx.fillRect(mx - r * 0.5, my - r * 0.14, r, r * 0.28);
+  } else if (k === 'fantome') {
+    cx.beginPath(); cx.arc(mx, my, r * 0.7, 0, 7); cx.stroke();
+  } else {
+    cx.beginPath(); cx.moveTo(mx, my - r * 0.85); cx.lineTo(mx + r * 0.7, my); cx.lineTo(mx, my + r * 0.85); cx.lineTo(mx - r * 0.7, my); cx.closePath(); cx.fill();
+  }
+  cx.restore();
 }
 function drawCell(i, [x, y], head) {
   if (x < 0 || y < 0 || x >= W || y >= H) return;
@@ -110,11 +179,70 @@ function drawBoom([x, y]) {
   cx.strokeStyle = '#fff'; cx.lineWidth = 2;
   cx.beginPath(); cx.arc((x + .5) * cell, (y + .5) * cell, cell * 1.6, 0, 7); cx.stroke();
 }
+
+// ---------- Interface ----------
 function setScore(s) { score = s; $('sc0').textContent = s[0]; $('sc1').textContent = s[1]; }
 function msg(big, sub = '', color = 'var(--text)', share = false) {
+  $('lobby').hidden = true;
   $('big').textContent = big; $('big').style.color = color; $('sub').textContent = sub; $('share').hidden = !share;
 }
+function applyPlayers() {
+  for (let i = 0; i < 2; i++) {
+    const p = players[i];
+    if (p) COL[i] = p.color;
+    document.documentElement.style.setProperty('--c' + i, COL[i]);
+    $('tg' + i).textContent = p ? p.name + (i === me ? ' (toi)' : '') : (i === me ? 'TOI' : '…');
+  }
+}
+function otherColor() { const o = players[1 - me]; return o ? o.color : null; }
+function renderSwatches() {
+  const box = $('swatches'); box.textContent = '';
+  const taken = otherColor();
+  if (!myColor || myColor === taken || !COLORS.includes(myColor)) myColor = COLORS.find(c => c !== taken);
+  COLORS.forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'sw' + (c === myColor ? ' sel' : '');
+    b.style.setProperty('--sw', c); b.setAttribute('aria-label', 'Couleur ' + c);
+    b.disabled = c === taken;
+    b.onclick = () => { myColor = c; $('lobbyErr').hidden = true; renderSwatches(); };
+    box.appendChild(b);
+  });
+  $('play').style.setProperty('--pick', myColor);
+}
+function showLobby() {
+  $('big').textContent = 'CHOISIS TON PILOTE'; $('big').style.color = 'var(--text)';
+  const o = players[1 - me];
+  $('sub').textContent = o ? `Adversaire : ${o.name}` : 'Tu es le premier dans la room.';
+  $('share').hidden = true; $('lobby').hidden = false;
+  renderSwatches();
+}
+function showWaiting(left) {
+  msg(left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote (clique sur la page pour activer le son) :', 'var(--text)', true);
+}
+function refreshIdle(left) {
+  if (me < 0) return msg('SPECTATEUR', 'La partie est pleine, tu regardes.');
+  if (!players[me]) showLobby(); else showWaiting(left);
+}
+$('lobby').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('name').value.trim().slice(0, 12);
+  store.set('tronName', name); store.set('tronColor', myColor);
+  sendJoin();
+});
+function sendJoin() {
+  if (window.ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'join', name: $('name').value.trim(), color: myColor }));
+}
 
+function addFx(p, label, ms) {
+  const chip = document.createElement('span');
+  chip.className = 'chip'; chip.style.setProperty('--c', COL[p]);
+  chip.textContent = label + ' · ' + (players[p] ? players[p].name : 'J' + (p + 1));
+  const bar = document.createElement('i'); bar.style.animationDuration = ms + 'ms';
+  chip.appendChild(bar); $('fx').appendChild(chip);
+  setTimeout(() => chip.remove(), ms);
+}
+
+// ---------- Sons ----------
 let audio = null, waiting = false;
 function unlockAudio() {
   try {
@@ -123,16 +251,45 @@ function unlockAudio() {
     startMusic();
   } catch {}
 }
+['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, unlockAudio, { passive: true }));
+const audioOk = () => audio && audio.state === 'running';
+function joinSound() {
+  if (!audioOk()) return;
+  const t = audio.currentTime;
+  [[660, 0], [990, .12], [1320, .24]].forEach(([f, dt]) => tone(f, f, t + dt, 0.18, 'square', 0.15));
+}
+function tone(f1, f2, t, dur, type, vol) {
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(audio.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+function pickSound(k) {
+  if (!audioOk()) return;
+  const t = audio.currentTime;
+  if (k === 'turbo') tone(250, 1400, t, 0.3, 'sawtooth', 0.12);
+  else if (k === 'frein') tone(700, 90, t, 0.4, 'square', 0.1);
+  else if (k === 'fantome') { tone(880, 440, t, 0.25, 'sine', 0.2); tone(440, 880, t + 0.2, 0.3, 'sine', 0.15); }
+  else {
+    const len = audio.sampleRate * 0.4, buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+    src.buffer = buf; f.type = 'bandpass'; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(5000, t + 0.4);
+    g.gain.value = 0.35; src.connect(f).connect(g).connect(audio.destination); src.start(t);
+  }
+}
 
 // Musique spatiale générée en direct (aucun fichier audio)
-let music = null, musicOn = true;
-try { musicOn = localStorage.getItem('tronMusic') !== '0'; } catch {}
+let music = null, musicOn = store.get('tronMusic') !== '0';
 const MUSIC_VOL = 0.45;
 function updMute() { $('mute').classList.toggle('on', musicOn); $('mute').textContent = musicOn ? 'MUSIQUE ON' : 'MUSIQUE OFF'; }
 updMute();
 $('mute').onclick = () => {
   musicOn = !musicOn; updMute();
-  try { localStorage.setItem('tronMusic', musicOn ? '1' : '0'); } catch {}
+  store.set('tronMusic', musicOn ? '1' : '0');
   if (music) music.master.gain.setTargetAtTime(musicOn ? MUSIC_VOL : 0, audio.currentTime, 0.1);
 };
 function startMusic() {
@@ -182,21 +339,8 @@ function startMusic() {
   music = { master, timer: setInterval(schedule, 100) };
   schedule();
 }
-['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, unlockAudio, { passive: true }));
-function joinSound() {
-  if (!audio || audio.state !== 'running') return;
-  const t = audio.currentTime;
-  [[660, 0], [990, .12], [1320, .24]].forEach(([f, dt]) => {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = 'square'; o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t + dt);
-    g.gain.exponentialRampToValueAtTime(0.15, t + dt + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.18);
-    o.connect(g).connect(audio.destination);
-    o.start(t + dt); o.stop(t + dt + 0.2);
-  });
-}
 
+// ---------- Réseau ----------
 let countTimer;
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/?r=' + encodeURIComponent(room));
@@ -204,37 +348,60 @@ function connect() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'hello') {
-      me = m.you; W = m.W; H = m.H; setScore(m.score); fit();
-      $('tg0').textContent = me === 0 ? 'TOI' : 'J1'; $('tg1').textContent = me === 1 ? 'TOI' : 'J2';
-      if (me < 0) msg('SPECTATEUR', 'La partie est pleine, tu regardes.');
+      me = m.you; W = m.W; H = m.H; COLORS = m.colors; players = m.players; walls = new Uint8Array(W * H);
+      setScore(m.score); applyPlayers(); fit();
+      if (me >= 0 && wasJoined) sendJoin();
+      refreshIdle();
+    } else if (m.t === 'lobby') {
+      players = m.players; applyPlayers();
+      if (me >= 0 && players[me]) wasJoined = true;
+      if (!$('lobby').hidden || (me >= 0 && players[me] && !players[1 - me])) refreshIdle();
+    } else if (m.t === 'taken') {
+      $('lobbyErr').hidden = false; showLobby();
     } else if (m.t === 'wait') {
-      setScore(m.score); trails = [[], []]; crash = null; redraw(); waiting = true;
-      if (me >= 0) msg(m.left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote (clique sur la page pour activer le son) :', 'var(--text)', true);
+      setScore(m.score); trails = [[], []]; crash = null; items = []; walls = new Uint8Array(W * H); redraw();
+      $('fx').textContent = ''; waiting = true;
+      refreshIdle(m.left);
     } else if (m.t === 'round') {
       if (waiting) { waiting = false; joinSound(); }
-      W = m.W; H = m.H; setScore(m.score); trails = m.heads.map(h => [h]); crash = null; fit();
-      const side = me === 0 ? 'Tu es CYAN, à gauche' : me === 1 ? 'Tu es ORANGE, à droite' : '';
+      W = m.W; H = m.H; players = m.players; applyPlayers(); setScore(m.score);
+      walls = new Uint8Array(W * H); m.walls.forEach(i => { walls[i] = 1; });
+      trails = m.heads.map(h => [h]); crash = null; items = []; $('fx').textContent = ''; fit();
+      const side = me === 0 ? 'Tu pars à gauche' : me === 1 ? 'Tu pars à droite' : '';
+      const sub = 'Map : ' + m.map + (side ? ' · ' + side : '');
+      const col = me >= 0 ? COL[me] : 'var(--text)';
       let n = 3; clearInterval(countTimer);
-      msg(String(n), side, me >= 0 ? COL[me] : 'var(--text)');
-      countTimer = setInterval(() => { n--; if (n > 0) msg(String(n), side, me >= 0 ? COL[me] : 'var(--text)'); else clearInterval(countTimer); }, 1000);
+      msg(String(n), sub, col);
+      countTimer = setInterval(() => { n--; if (n > 0) msg(String(n), sub, col); else clearInterval(countTimer); }, 1000);
     } else if (m.t === 'go') {
       clearInterval(countTimer); msg('');
     } else if (m.t === 'tick') {
       m.h.forEach((p, i) => {
-        const t = trails[i]; const prev = t[t.length - 1];
+        const t = trails[i], prev = t[t.length - 1];
+        if (prev && prev[0] === p[0] && prev[1] === p[1]) return;
         if (prev) drawCell(i, prev, false);
         t.push(p); drawCell(i, p, true);
       });
-      window.lastHeads = m.h;
+    } else if (m.t === 'items') {
+      items = m.items; redraw();
+    } else if (m.t === 'pick') {
+      items = m.items;
+      pickSound(m.k);
+      if (m.k === 'turbo') addFx(m.p, 'TURBO', 3000);
+      else if (m.k === 'frein') addFx(1 - m.p, 'FREIN', 3000);
+      else if (m.k === 'fantome') addFx(m.p, 'FANTÔME', 2000);
+      else { addFx(m.p, 'GOMME', 1200); trails = m.heads.map(h => [h]); }
+      redraw();
     } else if (m.t === 'end') {
       setScore(m.score);
       crash = m.crash.map((c, i) => c ? trails[i][trails[i].length - 1] : null);
       redraw();
       let big, color;
+      const nm = i => players[i] ? players[i].name.toUpperCase() : 'J' + (i + 1);
       if (m.winner < 0) { big = 'ÉGALITÉ'; color = 'var(--text)'; }
-      else if (me < 0) { big = (m.winner === 0 ? 'CYAN' : 'ORANGE') + ' GAGNE'; color = COL[m.winner]; }
+      else if (me < 0) { big = nm(m.winner) + ' GAGNE'; color = COL[m.winner]; }
       else if (m.winner === me) { big = m.match ? 'VICTOIRE' : 'MANCHE GAGNÉE'; color = COL[me]; }
-      else { big = m.match ? 'DÉFAITE' : 'CRASH'; color = COL[1 - me] ; }
+      else { big = m.match ? 'DÉFAITE' : 'CRASH'; color = COL[1 - me]; }
       msg(big, m.match ? `Match terminé ${m.score[0]} – ${m.score[1]}. Revanche dans 5 s.` : 'Manche suivante…', color);
     }
   };
@@ -242,9 +409,11 @@ function connect() {
 }
 connect();
 
+// ---------- Contrôles ----------
 function turn(d) { if (window.ws && ws.readyState === 1 && me >= 0) ws.send(JSON.stringify({ t: 'dir', d })); }
 const KEYS = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3, z: 0, w: 0, d: 1, s: 2, q: 3, a: 3 };
 addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
   const d = KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (d !== undefined) { e.preventDefault(); turn(d); }
 });
