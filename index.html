@@ -58,8 +58,6 @@
   .sw:disabled { opacity: .15; box-shadow: none; cursor: not-allowed; }
   #play { background: var(--pick, var(--c0)); font-size: 1.05rem; letter-spacing: .2em; padding: 10px; }
   #lobbyErr { margin: 0; color: var(--i-frein); font-size: .85rem; }
-  footer { color: var(--dim); font-size: .78rem; text-align: center; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: center; }
-  footer b { font-weight: 700; }
   @media (max-width: 560px) {
     h1 { display: none; }
     #mute { font-size: .7rem; padding: 6px 8px; }
@@ -95,13 +93,6 @@
     </form>
   </div>
 </div>
-<footer>
-  <span>Flèches, ZQSD ou WASD · mobile : glisse le doigt · premier à 5</span>
-  <span><b style="color:var(--i-turbo)">» Turbo</b> toi + vite</span>
-  <span><b style="color:var(--i-frein)">● Frein</b> lui + lent</span>
-  <span><b style="color:var(--i-fantome)">○ Fantôme</b> traverse les traînées</span>
-  <span><b style="color:var(--i-gomme)">◆ Gomme</b> efface tout</span>
-</footer>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -119,7 +110,7 @@ const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
-const ITEM_COL = { turbo: '#ffe14a', frein: '#ff3b4a', fantome: '#c9b8ff', gomme: '#3dff7a' };
+const ITEM_COL = { turbo: '#ffe14a', frein: '#ff3b4a', fantome: '#c9b8ff', gomme: '#3dff7a', mur: '#6fa0ff' };
 const cv = $('cv'), cx = cv.getContext('2d');
 let W = 60, H = 40, cell = 10, me = -1, trails = [[], []], crash = null, score = [0, 0];
 let walls = new Uint8Array(W * H), items = [], players = [null, null], COLORS = [], COL = ['#36f2ff', '#ff8a2a'];
@@ -161,6 +152,10 @@ function drawItem([x, y, k]) {
     cx.shadowBlur = 0; cx.fillStyle = '#fff'; cx.fillRect(mx - r * 0.5, my - r * 0.14, r, r * 0.28);
   } else if (k === 'fantome') {
     cx.beginPath(); cx.arc(mx, my, r * 0.7, 0, 7); cx.stroke();
+  } else if (k === 'mur') {
+    const bw = r * 0.62, bh = r * 0.42, g = r * 0.1;
+    cx.fillRect(mx - bw - g / 2, my - bh - g / 2, bw, bh); cx.fillRect(mx + g / 2, my - bh - g / 2, bw, bh);
+    cx.fillRect(mx - bw / 2, my + g / 2, bw, bh);
   } else {
     cx.beginPath(); cx.moveTo(mx, my - r * 0.85); cx.lineTo(mx + r * 0.7, my); cx.lineTo(mx, my + r * 0.85); cx.lineTo(mx - r * 0.7, my); cx.closePath(); cx.fill();
   }
@@ -217,7 +212,7 @@ function showLobby() {
   renderSwatches();
 }
 function showWaiting(left) {
-  msg(left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote (clique sur la page pour activer le son) :', 'var(--text)', true);
+  msg(left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote :', 'var(--text)', true);
 }
 function refreshIdle(left) {
   if (me < 0) return msg('SPECTATEUR', 'La partie est pleine, tu regardes.');
@@ -272,6 +267,7 @@ function pickSound(k) {
   const t = audio.currentTime;
   if (k === 'turbo') tone(250, 1400, t, 0.3, 'sawtooth', 0.12);
   else if (k === 'frein') tone(700, 90, t, 0.4, 'square', 0.1);
+  else if (k === 'mur') { tone(110, 520, t, 0.35, 'square', 0.1); tone(165, 780, t + 0.05, 0.3, 'square', 0.06); }
   else if (k === 'fantome') { tone(880, 440, t, 0.25, 'sine', 0.2); tone(440, 880, t + 0.2, 0.3, 'sine', 0.15); }
   else {
     const len = audio.sampleRate * 0.4, buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
@@ -367,8 +363,7 @@ function connect() {
       W = m.W; H = m.H; players = m.players; applyPlayers(); setScore(m.score);
       walls = new Uint8Array(W * H); m.walls.forEach(i => { walls[i] = 1; });
       trails = m.heads.map(h => [h]); crash = null; items = []; $('fx').textContent = ''; fit();
-      const side = me === 0 ? 'Tu pars à gauche' : me === 1 ? 'Tu pars à droite' : '';
-      const sub = 'Map : ' + m.map + (side ? ' · ' + side : '');
+      const sub = m.map;
       const col = me >= 0 ? COL[me] : 'var(--text)';
       let n = 3; clearInterval(countTimer);
       msg(String(n), sub, col);
@@ -390,6 +385,7 @@ function connect() {
       if (m.k === 'turbo') addFx(m.p, 'TURBO', 3000);
       else if (m.k === 'frein') addFx(1 - m.p, 'FREIN', 3000);
       else if (m.k === 'fantome') addFx(m.p, 'FANTÔME', 2000);
+      else if (m.k === 'mur') addFx(m.p, 'PASSE-MURAILLE', 3000);
       else { addFx(m.p, 'GOMME', 1200); trails = m.heads.map(h => [h]); }
       redraw();
     } else if (m.t === 'end') {
