@@ -4,7 +4,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const W = 60, H = 40, TICK_MS = 40, WIN = 5, WALL = 3;
+const W = 60, H = 40, TICK_MS = 40, WIN = 5, MAXP = 5, WALL = 9;
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
 const COLORS = ['#36f2ff', '#ff8a2a', '#ff4fd8', '#3dff7a', '#ffe14a', '#9d6bff', '#ff3b4a', '#e8eeff'];
 const KINDS = ['turbo', 'frein', 'fantome', 'gomme', 'mur'];
@@ -35,13 +35,33 @@ const MAPS = [
   } },
 ];
 
-function buildMap(map) {
+// Points de départ : face à face à 2, en cercle (sens horaire) à 3+
+function spawnPoints(n) {
+  if (n === 2) return [{ x: 8, y: 20, d: 1 }, { x: W - 9, y: 20, d: 3 }];
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    const x = Math.round(29.5 + 22 * Math.cos(a)), y = Math.round(19.5 + 14 * Math.sin(a));
+    const tx = -Math.sin(a), ty = Math.cos(a);
+    const d = Math.abs(tx) >= Math.abs(ty) ? (tx > 0 ? 1 : 3) : (ty > 0 ? 2 : 0);
+    pts.push({ x, y, d });
+  }
+  return pts;
+}
+
+function buildMap(map, spawns) {
   const g = new Uint8Array(W * H);
   const set = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) g[y * W + x] = WALL; };
   const add = (x, y) => { set(x, y); set(W - 1 - x, y); set(x, H - 1 - y); set(W - 1 - x, H - 1 - y); };
   map.build(add);
-  // couloir de départ toujours libre
-  for (let y = 17; y <= 22; y++) for (let x = 0; x <= 16; x++) { g[y * W + x] = 0; g[y * W + (W - 1 - x)] = 0; }
+  // couloir de départ toujours libre devant chaque joueur
+  for (const s of spawns) {
+    const p = (s.d + 1) % 4;
+    for (let st = -1; st <= 10; st++) for (let l = -1; l <= 1; l++) {
+      const x = s.x + DX[s.d] * st + DX[p] * l, y = s.y + DY[s.d] * st + DY[p] * l;
+      if (x >= 0 && y >= 0 && x < W && y < H) g[y * W + x] = 0;
+    }
+  }
   return g;
 }
 
@@ -53,22 +73,30 @@ const server = http.createServer((req, res) => {
 });
 const wss = new WebSocketServer({ server });
 const rooms = new Map();
+let nextId = 1;
 
 function getRoom(id) {
   let r = rooms.get(id);
   if (!r) {
-    r = { id, slots: [null, null], players: [null, null], specs: new Set(), score: [0, 0], phase: 'wait',
-      grid: null, bikes: null, items: [], loop: null, timeout: null, t: 0, nextItem: 0, bag: [], lastMap: -1 };
+    r = { id, conns: [], host: null, phase: 'lobby', match: [], grid: null, bikes: null, items: [],
+      loop: null, timeout: null, t: 0, nextItem: 0, bag: [], lastMap: -1, mapName: '', walls: [] };
     rooms.set(id, r);
   }
   return r;
 }
-function send(ws, m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+function send(c, m) { if (c.ws.readyState === 1) c.ws.send(JSON.stringify(m)); }
 function cast(r, m) {
   const s = JSON.stringify(m);
-  for (const ws of [...r.slots, ...r.specs]) if (ws && ws.readyState === 1) ws.send(s);
+  for (const c of r.conns) if (c.ws.readyState === 1) c.ws.send(s);
 }
-const ready = r => r.slots[0] && r.slots[1] && r.players[0] && r.players[1];
+const joined = r => r.conns.filter(c => c.name);
+function lobbyMsg(r) {
+  return {
+    t: 'lobby', host: r.host ? r.host.id : null, phase: r.phase === 'lobby' ? 'lobby' : 'game',
+    players: joined(r).map(c => ({ id: c.id, name: c.name, color: c.color, score: c.score })),
+    match: r.match.map(c => c.id),
+  };
+}
 function stop(r) { clearInterval(r.loop); clearTimeout(r.timeout); r.loop = r.timeout = null; }
 
 function pickMap(r) {
@@ -80,25 +108,61 @@ function pickMap(r) {
   return MAPS[r.lastMap];
 }
 
+function roundMsg(r, live) {
+  const m = {
+    t: 'round', W, H, map: r.mapName, walls: r.walls, ids: r.match.map(c => c.id),
+    heads: r.bikes.map(b => [b.x, b.y]), alive: r.bikes.map(b => b.alive),
+    scores: r.match.map(c => c.score), items: r.items, live,
+  };
+  if (live) {
+    m.cells = [];
+    r.grid.forEach((v, i) => { if (v >= 1 && v <= MAXP) m.cells.push([i, v]); });
+  }
+  return m;
+}
+
+function startMatch(r) {
+  r.match = joined(r).slice(0, MAXP);
+  r.match.forEach(c => { c.score = 0; });
+  r.phase = 'count';
+  cast(r, lobbyMsg(r));
+  newRound(r);
+}
+
+function backToLobby(r) {
+  stop(r);
+  r.phase = 'lobby'; r.bikes = null; r.items = []; r.match = [];
+  cast(r, lobbyMsg(r));
+}
+
 function newRound(r) {
   stop(r);
-  if (!ready(r)) { r.phase = 'wait'; r.score = [0, 0]; cast(r, { t: 'wait', score: r.score }); return; }
+  r.match = r.match.filter(c => c.open);
+  if (r.match.length < 2) return backToLobby(r);
+  const sp = spawnPoints(r.match.length);
   const map = pickMap(r);
-  r.grid = buildMap(map);
-  const walls = [];
-  r.grid.forEach((v, i) => { if (v === WALL) walls.push(i); });
-  const y = H >> 1;
-  const mk = (x, d) => ({ x, y, d, q: [], acc: 0, fast: 0, slow: 0, ghost: 0, wall: 0 });
-  r.bikes = [mk(8, 1), mk(W - 9, 3)];
+  r.grid = buildMap(map, sp);
+  r.walls = [];
+  r.grid.forEach((v, i) => { if (v === WALL) r.walls.push(i); });
+  r.bikes = sp.map(s => ({ ...s, q: [], acc: 0, fast: 0, slow: 0, ghost: 0, wall: 0, alive: true }));
   r.bikes.forEach((b, i) => { r.grid[b.y * W + b.x] = i + 1; });
-  r.items = []; r.t = 0; r.nextItem = T(2000);
+  r.items = []; r.t = 0; r.nextItem = T(2000); r.mapName = map.name;
   r.phase = 'count';
-  cast(r, { t: 'round', W, H, heads: r.bikes.map(b => [b.x, b.y]), score: r.score, walls, map: map.name, players: r.players });
+  cast(r, roundMsg(r, false));
   r.timeout = setTimeout(() => {
     r.phase = 'play';
     cast(r, { t: 'go' });
     r.loop = setInterval(() => tick(r), TICK_MS);
   }, 3000);
+}
+
+function endRound(r, winner) {
+  stop(r);
+  if (winner >= 0) r.match[winner].score++;
+  const match = r.match.some(c => c.score >= WIN);
+  r.phase = 'end';
+  cast(r, { t: 'end', winner, match, scores: r.match.map(c => c.score) });
+  r.timeout = setTimeout(() => (match ? backToLobby(r) : newRound(r)), match ? 5000 : 2500);
 }
 
 function spawnItem(r) {
@@ -107,7 +171,7 @@ function spawnItem(r) {
     let ok = true;
     for (let dx = 0; dx < 2 && ok; dx++) for (let dy = 0; dy < 2 && ok; dy++) if (r.grid[(y + dy) * W + x + dx] !== 0) ok = false;
     if (!ok) continue;
-    if (r.bikes.some(b => Math.abs(b.x - x) < 5 && Math.abs(b.y - y) < 5)) continue;
+    if (r.bikes.some(b => b.alive && Math.abs(b.x - x) < 5 && Math.abs(b.y - y) < 5)) continue;
     if (r.items.some(([ix, iy]) => Math.abs(ix - x) < 4 && Math.abs(iy - y) < 4)) continue;
     r.items.push([x, y, KINDS[Math.floor(Math.random() * KINDS.length)]]);
     return true;
@@ -117,14 +181,15 @@ function spawnItem(r) {
 
 function tick(r) {
   r.t++;
-  const bikes = r.bikes, [a, b] = bikes;
-  for (const k of bikes) {
+  const bk = r.bikes;
+  for (const k of bk) {
+    k.moved = false;
+    if (!k.alive) continue;
     const f = k.fast > r.t, s = k.slow > r.t;
     const period = f && !s ? 1 : s && !f ? 4 : 2;
     k.acc++;
-    k.moved = k.acc >= period;
-    if (k.moved) {
-      k.acc = 0;
+    if (k.acc >= period) {
+      k.moved = true; k.acc = 0;
       if (k.q.length) k.d = k.q.shift();
       k.x += DX[k.d]; k.y += DY[k.d];
     }
@@ -136,40 +201,42 @@ function tick(r) {
     if (c === WALL) return !(k.wall > r.t);
     return c !== 0 && !(k.ghost > r.t);
   };
-  let deadA = hit(a), deadB = hit(b);
-  if (a.x === b.x && a.y === b.y && !(a.ghost > r.t) && !(b.ghost > r.t)) deadA = deadB = true;
-  const mark = (k, id, dead) => { if (k.moved && !dead && r.grid[k.y * W + k.x] !== WALL) r.grid[k.y * W + k.x] = id; };
-  mark(a, 1, deadA); mark(b, 2, deadB);
-  if (a.moved || b.moved) cast(r, { t: 'tick', h: [[a.x, a.y], [b.x, b.y]] });
-
-  if (deadA || deadB) {
-    stop(r);
-    const winner = deadA && deadB ? -1 : deadA ? 1 : 0;
-    if (winner >= 0) r.score[winner]++;
-    const match = r.score.some(s => s >= WIN);
-    r.phase = 'end';
-    cast(r, { t: 'end', winner, score: r.score, match, crash: [deadA, deadB] });
-    r.timeout = setTimeout(() => { if (match) r.score = [0, 0]; newRound(r); }, match ? 5000 : 2500);
-    return;
+  const dead = new Set();
+  bk.forEach((k, i) => { if (k.alive && hit(k)) dead.add(i); });
+  for (let i = 0; i < bk.length; i++) for (let j = i + 1; j < bk.length; j++) {
+    const a = bk[i], b = bk[j];
+    if (!a.alive || !b.alive || !(a.moved || b.moved)) continue;
+    if (a.x === b.x && a.y === b.y && !(a.ghost > r.t) && !(b.ghost > r.t)) { dead.add(i); dead.add(j); }
+  }
+  bk.forEach((k, i) => {
+    if (k.alive && k.moved && !dead.has(i) && r.grid[k.y * W + k.x] !== WALL) r.grid[k.y * W + k.x] = i + 1;
+  });
+  if (bk.some(k => k.moved)) cast(r, { t: 'tick', h: bk.map(k => [k.x, k.y]) });
+  if (dead.size) {
+    dead.forEach(i => { bk[i].alive = false; });
+    cast(r, { t: 'crash', p: [...dead] });
   }
 
+  const alive = [];
+  bk.forEach((k, i) => { if (k.alive) alive.push(i); });
+  if (alive.length <= 1) return endRound(r, alive.length ? alive[0] : -1);
+
   // ramassage des objets (zone 2x2)
-  bikes.forEach((k, p) => {
-    if (!k.moved) return;
+  bk.forEach((k, p) => {
+    if (!k.alive || !k.moved) return;
     const idx = r.items.findIndex(([ix, iy]) => k.x - ix >= 0 && k.x - ix <= 1 && k.y - iy >= 0 && k.y - iy <= 1);
     if (idx < 0) return;
     const kind = r.items[idx][2];
     r.items.splice(idx, 1);
-    const o = bikes[1 - p];
     if (kind === 'turbo') k.fast = r.t + T(3000);
-    else if (kind === 'frein') o.slow = r.t + T(3000);
+    else if (kind === 'frein') bk.forEach((o, j) => { if (j !== p && o.alive) o.slow = r.t + T(3000); });
     else if (kind === 'fantome') k.ghost = r.t + T(2000);
     else if (kind === 'mur') k.wall = r.t + T(3000);
     else if (kind === 'gomme') {
-      for (let i = 0; i < r.grid.length; i++) if (r.grid[i] === 1 || r.grid[i] === 2) r.grid[i] = 0;
-      bikes.forEach((bk, j) => { if (r.grid[bk.y * W + bk.x] !== WALL) r.grid[bk.y * W + bk.x] = j + 1; });
+      for (let i = 0; i < r.grid.length; i++) if (r.grid[i] >= 1 && r.grid[i] <= MAXP) r.grid[i] = 0;
+      bk.forEach((b, j) => { if (b.alive && r.grid[b.y * W + b.x] !== WALL) r.grid[b.y * W + b.x] = j + 1; });
     }
-    cast(r, { t: 'pick', p, k: kind, items: r.items, heads: bikes.map(bk => [bk.x, bk.y]) });
+    cast(r, { t: 'pick', p, k: kind, items: r.items, heads: bk.map(b => [b.x, b.y]) });
   });
 
   if (r.t >= r.nextItem) {
@@ -181,45 +248,58 @@ function tick(r) {
 wss.on('connection', (ws, req) => {
   const id = (new URL(req.url, 'http://x').searchParams.get('r') || 'main').slice(0, 24);
   const r = getRoom(id);
-  const slot = !r.slots[0] ? 0 : !r.slots[1] ? 1 : -1;
-  if (slot >= 0) { r.slots[slot] = ws; r.players[slot] = null; } else r.specs.add(ws);
+  const c = { id: nextId++, ws, name: null, color: null, score: 0, open: true };
+  r.conns.push(c);
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
-  send(ws, { t: 'hello', you: slot, W, H, score: r.score, players: r.players, colors: COLORS });
+  send(c, { t: 'hello', you: c.id, W, H, colors: COLORS, max: MAXP });
+  send(c, lobbyMsg(r));
+  if (r.phase !== 'lobby' && r.bikes) send(c, roundMsg(r, true));
 
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
-    if (slot < 0) return;
 
     if (m.t === 'join') {
-      if (r.phase !== 'wait') return;
-      const name = String(m.name || '').replace(/\s+/g, ' ').trim().slice(0, 12) || 'Pilote ' + (slot + 1);
+      if (c.name) return;
+      if (joined(r).length >= MAXP) { send(c, { t: 'full' }); return; }
+      const name = String(m.name || '').replace(/\s+/g, ' ').trim().slice(0, 12) || 'Pilote';
       const color = COLORS.includes(m.color) ? m.color : null;
-      const other = r.players[1 - slot];
-      if (!color || (other && other.color === color)) { send(ws, { t: 'taken' }); return; }
-      r.players[slot] = { name, color };
-      cast(r, { t: 'lobby', players: r.players });
-      if (ready(r)) newRound(r);
+      if (!color || joined(r).some(o => o.color === color)) { send(c, { t: 'taken' }); return; }
+      c.name = name; c.color = color; c.score = 0;
+      if (!r.host) r.host = c;
+      cast(r, lobbyMsg(r));
       return;
     }
 
-    if (m.t !== 'dir' || !r.bikes || r.phase === 'end' || r.phase === 'wait') return;
-    const d = m.d | 0; if (d < 0 || d > 3) return;
-    const k = r.bikes[slot];
-    const last = k.q.length ? k.q[k.q.length - 1] : k.d;
-    if (d === last || (d + 2) % 4 === last) return;
-    if (k.q.length < 3) k.q.push(d);
+    if (m.t === 'start') {
+      if (r.host === c && r.phase === 'lobby' && joined(r).length >= 2) startMatch(r);
+      return;
+    }
+
+    if (m.t === 'dir') {
+      const idx = r.match.indexOf(c);
+      if (idx < 0 || !r.bikes || (r.phase !== 'count' && r.phase !== 'play')) return;
+      const k = r.bikes[idx];
+      if (!k.alive) return;
+      const d = m.d | 0; if (d < 0 || d > 3) return;
+      const last = k.q.length ? k.q[k.q.length - 1] : k.d;
+      if (d === last || (d + 2) % 4 === last) return;
+      if (k.q.length < 3) k.q.push(d);
+    }
   });
 
   ws.on('close', () => {
-    if (slot >= 0) {
-      r.slots[slot] = null; r.players[slot] = null;
-      stop(r); r.phase = 'wait'; r.score = [0, 0]; r.bikes = null; r.items = [];
-      cast(r, { t: 'lobby', players: r.players });
-      cast(r, { t: 'wait', score: r.score, left: true });
-    } else r.specs.delete(ws);
-    if (!r.slots[0] && !r.slots[1] && !r.specs.size) rooms.delete(id);
+    c.open = false;
+    r.conns = r.conns.filter(o => o !== c);
+    if (r.host === c) r.host = joined(r)[0] || null;
+    const idx = r.match.indexOf(c);
+    if (idx >= 0 && r.bikes && r.bikes[idx].alive && (r.phase === 'count' || r.phase === 'play')) {
+      r.bikes[idx].alive = false;
+      cast(r, { t: 'crash', p: [idx] });
+    }
+    if (!r.conns.length) { stop(r); rooms.delete(id); return; }
+    cast(r, lobbyMsg(r));
   });
 });
 

@@ -9,8 +9,7 @@
 <style>
   :root {
     --bg: #05070d; --panel: #0b1020; --line: #16203a; --text: #d7e2ff; --dim: #6a7aa3;
-    --c0: #36f2ff; --c1: #ff8a2a;
-    --i-turbo: #ffe14a; --i-frein: #ff3b4a; --i-fantome: #c9b8ff; --i-gomme: #3dff7a;
+    --accent: #36f2ff; --err: #ff3b4a;
     --font: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
     color-scheme: dark;
   }
@@ -24,12 +23,12 @@
     overflow: hidden; touch-action: none; user-select: none;
   }
   header { width: 100%; max-width: 960px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  h1 { margin: 0; font-size: 1.1rem; letter-spacing: .3em; font-weight: 700; }
-  .score { display: flex; align-items: center; gap: 14px; font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .s0 { color: var(--c0); text-shadow: 0 0 12px var(--c0); }
-  .s1 { color: var(--c1); text-shadow: 0 0 12px var(--c1); }
-  .s0, .s1 { text-align: center; min-width: 4.5em; }
-  .tag { font-size: .65rem; letter-spacing: .1em; display: block; text-shadow: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9em; margin: 0 auto; }
+  h1 { margin: 0; font-size: 1.1rem; letter-spacing: .3em; font-weight: 700; white-space: nowrap; }
+  #board { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; min-width: 0; }
+  .pl { color: var(--c); text-align: center; font-variant-numeric: tabular-nums; }
+  .pl b { display: block; font-size: 1.5rem; line-height: 1.1; text-shadow: 0 0 12px var(--c); }
+  .pl span { display: block; font-size: .65rem; letter-spacing: .1em; max-width: 8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl.out { opacity: .35; }
   #fx { width: 100%; max-width: 960px; min-height: 24px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
   .chip { position: relative; overflow: hidden; border: 1px solid var(--c); color: var(--c); font-size: .75rem; font-weight: 700; letter-spacing: .12em; padding: 3px 10px 5px; }
   .chip i { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--c); animation: drain linear forwards; }
@@ -38,40 +37,48 @@
   canvas { display: block; border: 1px solid var(--line); box-shadow: 0 0 40px #0a1a3a; }
   #overlay {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 10px; text-align: center; pointer-events: none; padding: 8px;
+    gap: 10px; text-align: center; pointer-events: none; padding: 8px; overflow-y: auto;
   }
   #big { font-size: clamp(1.8rem, 8vw, 4.5rem); font-weight: 700; letter-spacing: .08em; }
   #sub { color: var(--dim); font-size: 1rem; max-width: 40ch; }
-  .share { pointer-events: auto; display: flex; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; max-width: 100%; }
-  .share code { font-size: .8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  button { font: inherit; font-weight: 700; background: var(--c0); color: #001018; border: 0; padding: 6px 12px; cursor: pointer; }
+  button { font: inherit; font-weight: 700; background: var(--accent); color: #001018; border: 0; padding: 6px 12px; cursor: pointer; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-  #mute { background: transparent; color: var(--dim); border: 1px solid var(--line); font-size: .8rem; letter-spacing: .1em; }
-  #mute.on { color: var(--c0); border-color: var(--c0); }
+  #mute { background: transparent; color: var(--dim); border: 1px solid var(--line); font-size: .8rem; letter-spacing: .1em; white-space: nowrap; }
+  #mute.on { color: var(--accent); border-color: var(--accent); }
 
-  #lobby { pointer-events: auto; background: var(--panel); border: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 10px; width: min(340px, 100%); text-align: left; }
-  #lobby label, #lobby .lbl { font-size: .7rem; letter-spacing: .18em; color: var(--dim); }
+  .panel { pointer-events: auto; background: var(--panel); border: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 12px; width: min(360px, 100%); text-align: left; }
+  .lbl, .panel label { font-size: .7rem; letter-spacing: .18em; color: var(--dim); }
+  #plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  #plist li { display: flex; align-items: center; gap: 10px; font-size: 1rem; }
+  #plist li i { width: 14px; height: 14px; flex: none; background: var(--c); box-shadow: 0 0 8px var(--c); }
+  #plist li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #plist li em { margin-left: auto; font-style: normal; font-size: .65rem; letter-spacing: .15em; color: var(--dim); }
+  #plist li.empty { color: var(--dim); font-size: .85rem; }
+  form, #hostBox { display: flex; flex-direction: column; gap: 10px; }
   #name { font: inherit; font-size: 1.1rem; background: var(--bg); color: var(--text); border: 1px solid var(--line); padding: 8px 10px; width: 100%; user-select: text; }
   #swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
   .sw { aspect-ratio: 1; padding: 0; border: 2px solid transparent; background: var(--sw); box-shadow: 0 0 10px var(--sw); }
   .sw.sel { border-color: var(--text); outline: 2px solid var(--sw); outline-offset: 2px; }
-  .sw:disabled { opacity: .15; box-shadow: none; cursor: not-allowed; }
-  #play { background: var(--pick, var(--c0)); font-size: 1.05rem; letter-spacing: .2em; padding: 10px; }
-  #lobbyErr { margin: 0; color: var(--i-frein); font-size: .85rem; }
+  .sw:disabled { opacity: .15; box-shadow: none; }
+  .big-btn { font-size: 1.05rem; letter-spacing: .2em; padding: 10px; }
+  #play { background: var(--pick, var(--accent)); }
+  #lobbyErr { margin: 0; color: var(--err); font-size: .85rem; }
+  .share { display: flex; gap: 8px; align-items: center; background: var(--bg); border: 1px solid var(--line); padding: 6px 8px; }
+  .share code { font-size: .78rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  #waitHost { margin: 0; color: var(--dim); font-size: .9rem; }
+  #home { align-items: stretch; }
   @media (max-width: 560px) {
     h1 { display: none; }
     #mute { font-size: .7rem; padding: 6px 8px; }
+    .pl b { font-size: 1.2rem; }
   }
 </style>
 </head>
 <body>
 <header>
   <h1>TRON DUEL</h1>
-  <div class="score">
-    <div class="s0"><span id="sc0">0</span><span class="tag" id="tg0">J1</span></div>
-    <span style="color:var(--dim)">–</span>
-    <div class="s1"><span id="sc1">0</span><span class="tag" id="tg1">J2</span></div>
-  </div>
+  <div id="board"></div>
   <button id="mute" type="button">MUSIQUE</button>
 </header>
 <div id="fx"></div>
@@ -80,42 +87,48 @@
   <div id="overlay">
     <div id="big">CONNEXION…</div>
     <div id="sub"></div>
-    <div class="share" id="share" hidden>
-      <code id="link"></code><button id="copy" type="button">Copier</button>
+    <div class="panel" id="home" hidden>
+      <button id="create" class="big-btn" type="button">CRÉER UN LOBBY</button>
     </div>
-    <form id="lobby" hidden>
-      <label for="name">PSEUDO</label>
-      <input id="name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Ton pseudo">
-      <span class="lbl">COULEUR</span>
-      <div id="swatches"></div>
-      <p id="lobbyErr" hidden>Cette couleur vient d'être prise, choisis-en une autre.</p>
-      <button id="play" type="submit">JOUER</button>
-    </form>
+    <div class="panel" id="panel" hidden>
+      <ul id="plist"></ul>
+      <form id="joinForm">
+        <label for="name">PSEUDO</label>
+        <input id="name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Ton pseudo">
+        <span class="lbl">COULEUR</span>
+        <div id="swatches"></div>
+        <p id="lobbyErr" hidden></p>
+        <button id="play" class="big-btn" type="submit">REJOINDRE</button>
+      </form>
+      <div id="hostBox">
+        <div class="share"><code id="link"></code><button id="copy" type="button">Copier</button></div>
+        <button id="start" class="big-btn" type="button">LANCER</button>
+        <p id="waitHost"></p>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const params = new URLSearchParams(location.search);
-let room = params.get('r');
-if (!room) { room = Math.random().toString(36).slice(2, 7); history.replaceState(null, '', '?r=' + room); }
-const shareUrl = location.origin + location.pathname + '?r=' + room;
-$('link').textContent = shareUrl;
-$('copy').onclick = async () => {
-  try { await navigator.clipboard.writeText(shareUrl); $('copy').textContent = 'Copié'; }
-  catch { getSelection().selectAllChildren($('link')); }
-};
-
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
+const room = new URLSearchParams(location.search).get('r');
 const ITEM_COL = { turbo: '#ffe14a', frein: '#ff3b4a', fantome: '#c9b8ff', gomme: '#3dff7a', mur: '#6fa0ff' };
 const cv = $('cv'), cx = cv.getContext('2d');
-let W = 60, H = 40, cell = 10, me = -1, trails = [[], []], crash = null, score = [0, 0];
-let walls = new Uint8Array(W * H), items = [], players = [null, null], COLORS = [], COL = ['#36f2ff', '#ff8a2a'];
+
+let W = 60, H = 40, cell = 10, MAXP = 5, COLORS = [];
+let myId = null, lob = { players: [], host: null, phase: 'lobby', match: [] };
+let ids = [], info = [], scores = [], alive = [], trails = [], crashes = [];
+let walls = new Uint8Array(W * H), items = [];
 let myColor = store.get('tronColor'), wasJoined = false;
 $('name').value = store.get('tronName') || '';
+
+const myIdx = () => (lob.phase === 'game' ? (ids.length ? ids : lob.match).indexOf(myId) : -1);
+const meJoined = () => lob.players.some(p => p.id === myId);
+const pById = id => lob.players.find(p => p.id === id);
 
 // ---------- Rendu ----------
 function fit() {
@@ -135,8 +148,8 @@ function redraw() {
     cx.fillStyle = '#2a4180'; cx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
   }
   items.forEach(drawItem);
-  trails.forEach((t, i) => t.forEach((p, j) => drawCell(i, p, j === t.length - 1)));
-  if (crash) crash.forEach(c => c && drawBoom(c));
+  trails.forEach((t, i) => t.forEach((p, j) => drawCell(i, p, j === t.length - 1 && alive[i])));
+  crashes.forEach(drawBoom);
 }
 function drawItem([x, y, k]) {
   const mx = (x + 1) * cell, my = (y + 1) * cell, r = cell * 0.85, c = ITEM_COL[k];
@@ -163,7 +176,7 @@ function drawItem([x, y, k]) {
 }
 function drawCell(i, [x, y], head) {
   if (x < 0 || y < 0 || x >= W || y >= H) return;
-  cx.fillStyle = COL[i];
+  cx.fillStyle = info[i] ? info[i].color : '#888';
   cx.globalAlpha = head ? 1 : .75;
   cx.fillRect(x * cell, y * cell, cell, cell);
   if (head) { cx.fillStyle = '#fff'; const m = cell / 3; cx.fillRect(x * cell + m, y * cell + m, cell - 2 * m, cell - 2 * m); }
@@ -176,72 +189,115 @@ function drawBoom([x, y]) {
 }
 
 // ---------- Interface ----------
-function setScore(s) { score = s; $('sc0').textContent = s[0]; $('sc1').textContent = s[1]; }
-function msg(big, sub = '', color = 'var(--text)', share = false) {
-  $('lobby').hidden = true;
-  $('big').textContent = big; $('big').style.color = color; $('sub').textContent = sub; $('share').hidden = !share;
+function renderBoard() {
+  const box = $('board'); box.textContent = '';
+  const rows = lob.phase === 'game' && ids.length
+    ? ids.map((id, i) => ({ id, name: info[i].name, color: info[i].color, score: scores[i], out: !alive[i] }))
+    : lob.players.map(p => ({ ...p, out: false }));
+  rows.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'pl' + (p.out ? ' out' : ''); d.style.setProperty('--c', p.color);
+    const b = document.createElement('b'); b.textContent = p.score || 0;
+    const s = document.createElement('span'); s.textContent = p.name + (p.id === myId ? ' (toi)' : '');
+    d.append(b, s); box.appendChild(d);
+  });
 }
-function applyPlayers() {
-  for (let i = 0; i < 2; i++) {
-    const p = players[i];
-    if (p) COL[i] = p.color;
-    document.documentElement.style.setProperty('--c' + i, COL[i]);
-    $('tg' + i).textContent = p ? p.name + (i === me ? ' (toi)' : '') : (i === me ? 'TOI' : '…');
+function msg(big, sub = '', color = 'var(--text)') {
+  $('panel').hidden = true; $('home').hidden = true;
+  $('big').textContent = big; $('big').style.color = color; $('sub').textContent = sub;
+}
+function showHome() {
+  msg('TRON DUEL', '2 à 5 joueurs');
+  $('home').hidden = false;
+}
+function showLobby() {
+  const n = lob.players.length, joinedNow = meJoined(), inGame = lob.phase === 'game';
+  $('big').textContent = 'LOBBY'; $('big').style.color = 'var(--text)';
+  $('sub').textContent = inGame ? 'Partie en cours · tu joues à la prochaine' : `${n}/${MAXP} pilotes`;
+  $('home').hidden = true; $('panel').hidden = false;
+
+  const ul = $('plist'); ul.textContent = '';
+  if (!n) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Personne pour l’instant.'; ul.appendChild(li); }
+  lob.players.forEach(p => {
+    const li = document.createElement('li'); li.style.setProperty('--c', p.color);
+    const i = document.createElement('i');
+    const s = document.createElement('span'); s.textContent = p.name + (p.id === myId ? ' (toi)' : '');
+    li.append(i, s);
+    if (p.id === lob.host) { const e = document.createElement('em'); e.textContent = 'HÔTE'; li.appendChild(e); }
+    ul.appendChild(li);
+  });
+
+  $('joinForm').hidden = joinedNow || n >= MAXP;
+  if (!joinedNow && n >= MAXP) { $('sub').textContent = 'Lobby plein, tu regardes.'; }
+  if (!$('joinForm').hidden) renderSwatches();
+
+  $('hostBox').hidden = !joinedNow;
+  const isHost = lob.host === myId;
+  $('start').hidden = !isHost || inGame;
+  $('start').disabled = n < 2;
+  $('start').textContent = n < 2 ? 'LANCER (2 MIN.)' : `LANCER · ${n} JOUEURS`;
+  const host = pById(lob.host);
+  $('waitHost').hidden = isHost || inGame;
+  $('waitHost').textContent = host ? `En attente que ${host.name} lance.` : '';
+}
+function refreshIdle() {
+  if (!room) return showHome();
+  if (lob.phase === 'lobby') return showLobby();
+  if (myIdx() < 0) {
+    if (!meJoined()) showLobby();
+    else msg('', 'Partie en cours · tu joues à la prochaine');
   }
 }
-function otherColor() { const o = players[1 - me]; return o ? o.color : null; }
+function takenColors() { return lob.players.filter(p => p.id !== myId).map(p => p.color); }
 function renderSwatches() {
   const box = $('swatches'); box.textContent = '';
-  const taken = otherColor();
-  if (!myColor || myColor === taken || !COLORS.includes(myColor)) myColor = COLORS.find(c => c !== taken);
+  const taken = takenColors();
+  if (!myColor || taken.includes(myColor) || !COLORS.includes(myColor)) myColor = COLORS.find(c => !taken.includes(c));
   COLORS.forEach(c => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'sw' + (c === myColor ? ' sel' : '');
     b.style.setProperty('--sw', c); b.setAttribute('aria-label', 'Couleur ' + c);
-    b.disabled = c === taken;
+    b.disabled = taken.includes(c);
     b.onclick = () => { myColor = c; $('lobbyErr').hidden = true; renderSwatches(); };
     box.appendChild(b);
   });
   $('play').style.setProperty('--pick', myColor);
 }
-function showLobby() {
-  $('big').textContent = 'CHOISIS TON PILOTE'; $('big').style.color = 'var(--text)';
-  const o = players[1 - me];
-  $('sub').textContent = o ? `Adversaire : ${o.name}` : 'Tu es le premier dans la room.';
-  $('share').hidden = true; $('lobby').hidden = false;
-  renderSwatches();
-}
-function showWaiting(left) {
-  msg(left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote :', 'var(--text)', true);
-}
-function refreshIdle(left) {
-  if (me < 0) return msg('SPECTATEUR', 'La partie est pleine, tu regardes.');
-  if (!players[me]) showLobby(); else showWaiting(left);
-}
-$('lobby').addEventListener('submit', e => {
+function lobbyError(t) { $('lobbyErr').textContent = t; $('lobbyErr').hidden = false; }
+$('name').addEventListener('input', () => { $('lobbyErr').hidden = true; });
+$('joinForm').addEventListener('submit', e => {
   e.preventDefault();
   const name = $('name').value.trim().slice(0, 12);
   if (!name) { lobbyError('Mets un pseudo.'); $('name').focus(); return; }
   store.set('tronName', name); store.set('tronColor', myColor);
   sendJoin();
 });
-function lobbyError(t) { $('lobbyErr').textContent = t; $('lobbyErr').hidden = false; }
-$('name').addEventListener('input', () => { $('lobbyErr').hidden = true; });
 function sendJoin() {
   if (window.ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'join', name: $('name').value.trim(), color: myColor }));
 }
+$('start').onclick = () => { if (window.ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'start' })); };
+$('create').onclick = () => { location.href = location.pathname + '?r=' + Math.random().toString(36).slice(2, 7); };
+if (room) {
+  const shareUrl = location.origin + location.pathname + '?r=' + encodeURIComponent(room);
+  $('link').textContent = shareUrl;
+  $('copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(shareUrl); $('copy').textContent = 'Copié'; }
+    catch { getSelection().selectAllChildren($('link')); }
+  };
+}
 
 function addFx(p, label, ms) {
+  if (!info[p]) return;
   const chip = document.createElement('span');
-  chip.className = 'chip'; chip.style.setProperty('--c', COL[p]);
-  chip.textContent = label + ' · ' + (players[p] ? players[p].name : 'J' + (p + 1));
+  chip.className = 'chip'; chip.style.setProperty('--c', info[p].color);
+  chip.textContent = label + ' · ' + info[p].name;
   const bar = document.createElement('i'); bar.style.animationDuration = ms + 'ms';
   chip.appendChild(bar); $('fx').appendChild(chip);
   setTimeout(() => chip.remove(), ms);
 }
 
 // ---------- Sons ----------
-let audio = null, waiting = false;
+let audio = null;
 function unlockAudio() {
   try {
     if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
@@ -251,11 +307,6 @@ function unlockAudio() {
 }
 ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, unlockAudio, { passive: true }));
 const audioOk = () => audio && audio.state === 'running';
-function joinSound() {
-  if (!audioOk()) return;
-  const t = audio.currentTime;
-  [[660, 0], [990, .12], [1320, .24]].forEach(([f, dt]) => tone(f, f, t + dt, 0.18, 'square', 0.15));
-}
 function tone(f1, f2, t, dur, type, vol) {
   const o = audio.createOscillator(), g = audio.createGain();
   o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
@@ -264,6 +315,11 @@ function tone(f1, f2, t, dur, type, vol) {
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(audio.destination);
   o.start(t); o.stop(t + dur + 0.02);
+}
+function joinSound() {
+  if (!audioOk()) return;
+  const t = audio.currentTime;
+  [[660, 0], [990, .12], [1320, .24]].forEach(([f, dt]) => tone(f, f, t + dt, 0.18, 'square', 0.15));
 }
 function pickSound(k) {
   if (!audioOk()) return;
@@ -347,69 +403,77 @@ function connect() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.t === 'hello') {
-      me = m.you; W = m.W; H = m.H; COLORS = m.colors; players = m.players; walls = new Uint8Array(W * H);
-      setScore(m.score); applyPlayers(); fit();
-      if (me >= 0 && wasJoined) sendJoin();
-      refreshIdle();
+      myId = m.you; W = m.W; H = m.H; COLORS = m.colors; MAXP = m.max; walls = new Uint8Array(W * H); fit();
+      if (wasJoined) sendJoin();
     } else if (m.t === 'lobby') {
-      players = m.players; applyPlayers();
-      if (me >= 0 && players[me]) wasJoined = true;
-      if (!$('lobby').hidden || (me >= 0 && players[me] && !players[1 - me])) refreshIdle();
+      const before = lob.players.length;
+      lob = m;
+      if (meJoined()) wasJoined = true;
+      if (meJoined() && lob.players.length > before && before > 0) joinSound();
+      if (lob.phase === 'lobby') { ids = []; $('fx').textContent = ''; }
+      renderBoard();
+      refreshIdle();
     } else if (m.t === 'taken') {
       showLobby(); lobbyError("Cette couleur vient d'être prise, choisis-en une autre.");
-    } else if (m.t === 'wait') {
-      setScore(m.score); trails = [[], []]; crash = null; items = []; walls = new Uint8Array(W * H); redraw();
-      $('fx').textContent = ''; waiting = true;
-      refreshIdle(m.left);
+    } else if (m.t === 'full') {
+      showLobby(); lobbyError('Lobby plein.');
     } else if (m.t === 'round') {
-      if (waiting) { waiting = false; joinSound(); }
-      W = m.W; H = m.H; players = m.players; applyPlayers(); setScore(m.score);
+      W = m.W; H = m.H; ids = m.ids; scores = m.scores; alive = m.alive;
+      info = ids.map(id => { const p = pById(id); return p ? { name: p.name, color: p.color } : { name: '?', color: '#888' }; });
       walls = new Uint8Array(W * H); m.walls.forEach(i => { walls[i] = 1; });
-      trails = m.heads.map(h => [h]); crash = null; items = []; $('fx').textContent = ''; fit();
-      const sub = m.map;
-      const col = me >= 0 ? COL[me] : 'var(--text)';
-      let n = 3; clearInterval(countTimer);
-      msg(String(n), sub, col);
-      countTimer = setInterval(() => { n--; if (n > 0) msg(String(n), sub, col); else clearInterval(countTimer); }, 1000);
+      items = m.items || []; crashes = []; $('fx').textContent = '';
+      trails = ids.map(() => []);
+      if (m.cells) m.cells.forEach(([i, v]) => trails[v - 1].push([i % W, (i / W) | 0]));
+      m.heads.forEach((h, i) => trails[i].push(h));
+      fit(); renderBoard();
+      clearInterval(countTimer);
+      if (m.live || (!meJoined() && myIdx() < 0)) { refreshIdle(); return; }
+      const col = myIdx() >= 0 ? info[myIdx()].color : 'var(--text)';
+      let n = 3;
+      msg(String(n), m.map, col);
+      countTimer = setInterval(() => { n--; if (n > 0) msg(String(n), m.map, col); else clearInterval(countTimer); }, 1000);
     } else if (m.t === 'go') {
-      clearInterval(countTimer); msg('');
+      clearInterval(countTimer);
+      if (myIdx() >= 0) msg(''); else refreshIdle();
     } else if (m.t === 'tick') {
       m.h.forEach((p, i) => {
+        if (!alive[i]) return;
         const t = trails[i], prev = t[t.length - 1];
         if (prev && prev[0] === p[0] && prev[1] === p[1]) return;
         if (prev) drawCell(i, prev, false);
         t.push(p); drawCell(i, p, true);
       });
+    } else if (m.t === 'crash') {
+      m.p.forEach(i => { alive[i] = false; const t = trails[i]; if (t && t.length) crashes.push(t[t.length - 1]); });
+      redraw(); renderBoard();
+      if (m.p.includes(myIdx()) && alive.filter(Boolean).length > 1) msg('CRASH', 'Tu regardes la fin de la manche', 'var(--dim)');
     } else if (m.t === 'items') {
       items = m.items; redraw();
     } else if (m.t === 'pick') {
       items = m.items;
       pickSound(m.k);
       if (m.k === 'turbo') addFx(m.p, 'TURBO', 3000);
-      else if (m.k === 'frein') addFx(1 - m.p, 'FREIN', 3000);
+      else if (m.k === 'frein') alive.forEach((a, i) => { if (a && i !== m.p) addFx(i, 'FREIN', 3000); });
       else if (m.k === 'fantome') addFx(m.p, 'FANTÔME', 2000);
       else if (m.k === 'mur') addFx(m.p, 'PASSE-MURAILLE', 3000);
       else { addFx(m.p, 'GOMME', 1200); trails = m.heads.map(h => [h]); }
       redraw();
     } else if (m.t === 'end') {
-      setScore(m.score);
-      crash = m.crash.map((c, i) => c ? trails[i][trails[i].length - 1] : null);
-      redraw();
+      scores = m.scores; renderBoard();
+      if (!meJoined()) return;
+      const me = myIdx(), w = m.winner;
       let big, color;
-      const nm = i => players[i] ? players[i].name.toUpperCase() : 'J' + (i + 1);
-      if (m.winner < 0) { big = 'ÉGALITÉ'; color = 'var(--text)'; }
-      else if (me < 0) { big = nm(m.winner) + ' GAGNE'; color = COL[m.winner]; }
-      else if (m.winner === me) { big = m.match ? 'VICTOIRE' : 'MANCHE GAGNÉE'; color = COL[me]; }
-      else { big = m.match ? 'DÉFAITE' : 'CRASH'; color = COL[1 - me]; }
-      msg(big, m.match ? `Match terminé ${m.score[0]} – ${m.score[1]}. Revanche dans 5 s.` : 'Manche suivante…', color);
+      if (w < 0) { big = 'ÉGALITÉ'; color = 'var(--text)'; }
+      else if (w === me) { big = m.match ? 'VICTOIRE' : 'MANCHE GAGNÉE'; color = info[me].color; }
+      else { big = info[w].name.toUpperCase() + (m.match ? ' GAGNE LE MATCH' : ' MARQUE'); color = info[w].color; }
+      msg(big, m.match ? 'Retour au lobby…' : 'Manche suivante…', color);
     }
   };
   ws.onclose = () => { msg('DÉCONNECTÉ', 'Reconnexion…'); setTimeout(connect, 1500); };
 }
-connect();
 
 // ---------- Contrôles ----------
-function turn(d) { if (window.ws && ws.readyState === 1 && me >= 0) ws.send(JSON.stringify({ t: 'dir', d })); }
+function turn(d) { if (window.ws && ws.readyState === 1 && myIdx() >= 0) ws.send(JSON.stringify({ t: 'dir', d })); }
 const KEYS = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3, z: 0, w: 0, d: 1, s: 2, q: 3, a: 3 };
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
@@ -426,7 +490,9 @@ addEventListener('touchmove', e => {
   t0 = [t.clientX, t.clientY];
 }, { passive: true });
 addEventListener('resize', fit);
+
 fit();
+if (room) connect(); else showHome();
 </script>
 </body>
 </html>
