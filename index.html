@@ -221,9 +221,12 @@ function refreshIdle(left) {
 $('lobby').addEventListener('submit', e => {
   e.preventDefault();
   const name = $('name').value.trim().slice(0, 12);
+  if (!name) { lobbyError('Mets un pseudo.'); $('name').focus(); return; }
   store.set('tronName', name); store.set('tronColor', myColor);
   sendJoin();
 });
+function lobbyError(t) { $('lobbyErr').textContent = t; $('lobbyErr').hidden = false; }
+$('name').addEventListener('input', () => { $('lobbyErr').hidden = true; });
 function sendJoin() {
   if (window.ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'join', name: $('name').value.trim(), color: myColor }));
 }
@@ -353,7 +356,7 @@ function connect() {
       if (me >= 0 && players[me]) wasJoined = true;
       if (!$('lobby').hidden || (me >= 0 && players[me] && !players[1 - me])) refreshIdle();
     } else if (m.t === 'taken') {
-      $('lobbyErr').hidden = false; showLobby();
+      showLobby(); lobbyError("Cette couleur vient d'être prise, choisis-en une autre.");
     } else if (m.t === 'wait') {
       setScore(m.score); trails = [[], []]; crash = null; items = []; walls = new Uint8Array(W * H); redraw();
       $('fx').textContent = ''; waiting = true;
