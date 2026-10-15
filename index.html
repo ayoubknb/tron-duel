@@ -40,6 +40,8 @@
   .share code { font-size: .8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   button { font: inherit; font-weight: 700; background: var(--p0); color: #001018; border: 0; padding: 6px 12px; cursor: pointer; }
   button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  #mute { background: transparent; color: var(--dim); border: 1px solid var(--line); font-size: .8rem; letter-spacing: .1em; }
+  #mute.on { color: var(--p0); border-color: var(--p0); }
   footer { color: var(--dim); font-size: .8rem; text-align: center; }
 </style>
 </head>
@@ -51,6 +53,7 @@
     <span style="color:var(--dim)">–</span>
     <div class="s1"><span id="sc1">0</span><span class="tag" id="tg1">J2</span></div>
   </div>
+  <button id="mute" type="button">MUSIQUE</button>
 </header>
 <div id="wrap">
   <canvas id="cv"></canvas>
@@ -112,6 +115,88 @@ function msg(big, sub = '', color = 'var(--text)', share = false) {
   $('big').textContent = big; $('big').style.color = color; $('sub').textContent = sub; $('share').hidden = !share;
 }
 
+let audio = null, waiting = false;
+function unlockAudio() {
+  try {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    startMusic();
+  } catch {}
+}
+
+// Musique spatiale générée en direct (aucun fichier audio)
+let music = null, musicOn = true;
+try { musicOn = localStorage.getItem('tronMusic') !== '0'; } catch {}
+const MUSIC_VOL = 0.45;
+function updMute() { $('mute').classList.toggle('on', musicOn); $('mute').textContent = musicOn ? 'MUSIQUE ON' : 'MUSIQUE OFF'; }
+updMute();
+$('mute').onclick = () => {
+  musicOn = !musicOn; updMute();
+  try { localStorage.setItem('tronMusic', musicOn ? '1' : '0'); } catch {}
+  if (music) music.master.gain.setTargetAtTime(musicOn ? MUSIC_VOL : 0, audio.currentTime, 0.1);
+};
+function startMusic() {
+  if (music || !audio) return;
+  const A = audio, mtof = n => 440 * Math.pow(2, (n - 69) / 12);
+  const master = A.createGain(); master.gain.value = musicOn ? MUSIC_VOL : 0; master.connect(A.destination);
+  const delay = A.createDelay(1); delay.delayTime.value = 0.43;
+  const fb = A.createGain(); fb.gain.value = 0.4; delay.connect(fb).connect(delay); delay.connect(master);
+  const lp = A.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 3; lp.connect(master);
+  const lfo = A.createOscillator(), lfoG = A.createGain();
+  lfo.frequency.value = 0.06; lfoG.gain.value = 450; lfo.connect(lfoG).connect(lp.frequency); lfo.start();
+
+  const CHORDS = [[45, 57, 60, 64], [41, 53, 57, 60], [48, 55, 60, 67], [43, 55, 59, 62]];
+  const ARP = [0, 1, 2, 3, 2, 1, 3, 2];
+  const step = 60 / 104 / 2;
+  let next = A.currentTime + 0.1, i = 0;
+
+  function pad(chord, t, dur) {
+    chord.forEach(n => [-7, 7].forEach(det => {
+      const o = A.createOscillator(), g = A.createGain();
+      o.type = 'sawtooth'; o.frequency.value = mtof(n); o.detune.value = det;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.025, t + 1.2);
+      g.gain.setValueAtTime(0.025, t + dur - 0.8);
+      g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.4);
+      o.connect(g).connect(lp); o.start(t); o.stop(t + dur + 0.5);
+    }));
+  }
+  function pluck(n, t, vol) {
+    const o = A.createOscillator(), g = A.createGain();
+    o.type = 'triangle'; o.frequency.value = mtof(n);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.connect(g); g.connect(master); g.connect(delay);
+    o.start(t); o.stop(t + 0.45);
+  }
+  function schedule() {
+    while (next < A.currentTime + 0.3) {
+      const chord = CHORDS[Math.floor(i / 16) % 4];
+      if (i % 16 === 0) pad(chord, next, 16 * step);
+      pluck(chord[ARP[i % 8]] + 12, next, i % 4 === 0 ? 0.08 : 0.05);
+      if (i % 8 === 0) pluck(chord[0], next, 0.12);
+      next += step; i++;
+    }
+  }
+  music = { master, timer: setInterval(schedule, 100) };
+  schedule();
+}
+['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, unlockAudio, { passive: true }));
+function joinSound() {
+  if (!audio || audio.state !== 'running') return;
+  const t = audio.currentTime;
+  [[660, 0], [990, .12], [1320, .24]].forEach(([f, dt]) => {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'square'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t + dt);
+    g.gain.exponentialRampToValueAtTime(0.15, t + dt + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.18);
+    o.connect(g).connect(audio.destination);
+    o.start(t + dt); o.stop(t + dt + 0.2);
+  });
+}
+
 let countTimer;
 function connect() {
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/?r=' + encodeURIComponent(room));
@@ -123,9 +208,10 @@ function connect() {
       $('tg0').textContent = me === 0 ? 'TOI' : 'J1'; $('tg1').textContent = me === 1 ? 'TOI' : 'J2';
       if (me < 0) msg('SPECTATEUR', 'La partie est pleine, tu regardes.');
     } else if (m.t === 'wait') {
-      setScore(m.score); trails = [[], []]; crash = null; redraw();
-      if (me >= 0) msg(m.left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote :', 'var(--text)', true);
+      setScore(m.score); trails = [[], []]; crash = null; redraw(); waiting = true;
+      if (me >= 0) msg(m.left ? 'ADVERSAIRE PARTI' : 'EN ATTENTE', 'Envoie ce lien à ton pote (clique sur la page pour activer le son) :', 'var(--text)', true);
     } else if (m.t === 'round') {
+      if (waiting) { waiting = false; joinSound(); }
       W = m.W; H = m.H; setScore(m.score); trails = m.heads.map(h => [h]); crash = null; fit();
       const side = me === 0 ? 'Tu es CYAN, à gauche' : me === 1 ? 'Tu es ORANGE, à droite' : '';
       let n = 3; clearInterval(countTimer);
