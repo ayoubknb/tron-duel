@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const W = 60, H = 40, TICK_MS = 40, WIN = 5, WALL = 3;
 const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
 const COLORS = ['#36f2ff', '#ff8a2a', '#ff4fd8', '#3dff7a', '#ffe14a', '#9d6bff', '#ff3b4a', '#e8eeff'];
-const KINDS = ['turbo', 'frein', 'fantome', 'gomme'];
+const KINDS = ['turbo', 'frein', 'fantome', 'gomme', 'mur'];
 const T = ms => Math.round(ms / TICK_MS);
 
 // ---------- Maps (symétriques gauche/droite et haut/bas) ----------
@@ -88,7 +88,7 @@ function newRound(r) {
   const walls = [];
   r.grid.forEach((v, i) => { if (v === WALL) walls.push(i); });
   const y = H >> 1;
-  const mk = (x, d) => ({ x, y, d, q: [], acc: 0, fast: 0, slow: 0, ghost: 0 });
+  const mk = (x, d) => ({ x, y, d, q: [], acc: 0, fast: 0, slow: 0, ghost: 0, wall: 0 });
   r.bikes = [mk(8, 1), mk(W - 9, 3)];
   r.bikes.forEach((b, i) => { r.grid[b.y * W + b.x] = i + 1; });
   r.items = []; r.t = 0; r.nextItem = T(2000);
@@ -133,13 +133,13 @@ function tick(r) {
     if (!k.moved) return false;
     if (k.x < 0 || k.y < 0 || k.x >= W || k.y >= H) return true;
     const c = r.grid[k.y * W + k.x];
-    if (c === WALL) return true;
+    if (c === WALL) return !(k.wall > r.t);
     return c !== 0 && !(k.ghost > r.t);
   };
   let deadA = hit(a), deadB = hit(b);
   if (a.x === b.x && a.y === b.y && !(a.ghost > r.t) && !(b.ghost > r.t)) deadA = deadB = true;
-  if (a.moved && !deadA) r.grid[a.y * W + a.x] = 1;
-  if (b.moved && !deadB) r.grid[b.y * W + b.x] = 2;
+  const mark = (k, id, dead) => { if (k.moved && !dead && r.grid[k.y * W + k.x] !== WALL) r.grid[k.y * W + k.x] = id; };
+  mark(a, 1, deadA); mark(b, 2, deadB);
   if (a.moved || b.moved) cast(r, { t: 'tick', h: [[a.x, a.y], [b.x, b.y]] });
 
   if (deadA || deadB) {
@@ -164,9 +164,10 @@ function tick(r) {
     if (kind === 'turbo') k.fast = r.t + T(3000);
     else if (kind === 'frein') o.slow = r.t + T(3000);
     else if (kind === 'fantome') k.ghost = r.t + T(2000);
+    else if (kind === 'mur') k.wall = r.t + T(3000);
     else if (kind === 'gomme') {
       for (let i = 0; i < r.grid.length; i++) if (r.grid[i] === 1 || r.grid[i] === 2) r.grid[i] = 0;
-      bikes.forEach((bk, j) => { r.grid[bk.y * W + bk.x] = j + 1; });
+      bikes.forEach((bk, j) => { if (r.grid[bk.y * W + bk.x] !== WALL) r.grid[bk.y * W + bk.x] = j + 1; });
     }
     cast(r, { t: 'pick', p, k: kind, items: r.items, heads: bikes.map(bk => [bk.x, bk.y]) });
   });
